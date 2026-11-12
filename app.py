@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-BASE_DIR = '/home/aiteam/Desktop/shop'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 EXCEL_PATH = os.path.join(BASE_DIR, 'Vegetable_Omnichannel_Business_Model.xlsx')
 ORG_IMG_DIR = os.path.join(BASE_DIR, 'organized_shops')
 
