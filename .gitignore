@@ -1,2 +1,5 @@
 Photos-1-001.zip
 .~lock.*
+__pycache__/
+auth_config.json
+

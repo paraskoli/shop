@@ -1,4 +1,5 @@
 import os
+import json
 import streamlit as st
 import pandas as pd
 from PIL import Image
@@ -14,6 +15,62 @@ st.set_page_config(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 EXCEL_PATH = os.path.join(BASE_DIR, 'Vegetable_Omnichannel_Business_Model.xlsx')
 ORG_IMG_DIR = os.path.join(BASE_DIR, 'organized_shops')
+AUTH_CONFIG_FILE = os.path.join(BASE_DIR, 'auth_config.json')
+
+# Authentication Configuration & Helpers
+DEFAULT_USERS = {
+    "admin": "admin123",
+    "manager": "mandi2024"
+}
+
+def load_auth_config():
+    if not os.path.exists(AUTH_CONFIG_FILE):
+        try:
+            with open(AUTH_CONFIG_FILE, 'w') as f:
+                json.dump({"users": DEFAULT_USERS}, f, indent=4)
+        except Exception:
+            pass
+        return {"users": DEFAULT_USERS}
+    try:
+        with open(AUTH_CONFIG_FILE, 'r') as f:
+            return json.load(f)
+    except Exception:
+        return {"users": DEFAULT_USERS}
+
+def save_auth_config(config):
+    with open(AUTH_CONFIG_FILE, 'w') as f:
+        json.dump(config, f, indent=4)
+
+def verify_credentials(username, password):
+    if not password:
+        return False, None
+    # Environment variable override if specified
+    env_pass = os.environ.get("APP_PASSWORD") or os.environ.get("ADMIN_PASSWORD")
+    if env_pass and password == env_pass:
+        return True, username.strip() if username.strip() else "admin"
+
+    config = load_auth_config()
+    users = config.get("users", DEFAULT_USERS)
+    u_clean = username.strip() if username else ""
+
+    if u_clean:
+        for u, p in users.items():
+            if u.lower() == u_clean.lower() and str(p) == str(password):
+                return True, u
+    else:
+        if str(users.get("admin")) == str(password):
+            return True, "admin"
+        for u, p in users.items():
+            if str(p) == str(password):
+                return True, u
+
+    return False, None
+
+# Session State Initialization
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+if "username" not in st.session_state:
+    st.session_state["username"] = ""
 
 # Custom CSS for polished green theme
 st.markdown("""
@@ -104,6 +161,74 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# -------------------------------------------------------------
+# AUTHENTICATION GATE (HOME SCREEN LOGIN)
+# -------------------------------------------------------------
+if not st.session_state.get("authenticated", False):
+    # Minimal locked sidebar
+    with st.sidebar:
+        st.image("https://img.icons8.com/fluency/96/vegetables.png", width=70)
+        st.markdown("### **Sabzi Mandi Platform**")
+        st.markdown("**Omnichannel Operating Model**")
+        st.markdown("---")
+        st.info("🔒 **Access Protected**\nPlease enter your login password on the home screen to unlock the platform.")
+        st.markdown("---")
+        st.caption("📍 Anchored at New Sabzi Mandi, Ghazipur, Delhi-110096")
+
+    # Centered login form on home screen
+    col_l1, col_l2, col_l3 = st.columns([1, 1.8, 1])
+    with col_l2:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #F4F9F4 0%, #E8F5E9 100%);
+                    border: 2px solid #2D6A4F;
+                    border-radius: 16px;
+                    padding: 28px 24px 20px 24px;
+                    text-align: center;
+                    margin-top: 25px;
+                    margin-bottom: 25px;
+                    box-shadow: 0 6px 18px rgba(0,0,0,0.06);">
+            <div style="font-size: 3.2rem; line-height: 1.1; margin-bottom: 6px;">🥦</div>
+            <h2 style="color: #1E4620; margin: 0 0 4px 0; font-weight: 800; font-size: 1.8rem;">Sabzi Mandi to Table</h2>
+            <p style="color: #2D6A4F; font-size: 0.95rem; font-weight: 600; margin: 0 0 14px 0;">Omnichannel Vegetable Business Platform</p>
+            <span style="background-color: #1E4620; color: white; padding: 5px 14px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; letter-spacing: 0.5px;">
+                🔒 HOME SCREEN LOGIN REQUIRED
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        with st.form("home_screen_login_form"):
+            st.markdown("#### 🔐 **Enter Credentials**")
+            login_user = st.text_input("Username", value="admin", placeholder="e.g. admin", help="Enter username (default: admin)")
+            login_pass = st.text_input("Password", type="password", placeholder="Enter your password", help="Enter login password")
+            
+            submit_login = st.form_submit_button("🔓 Log In to Platform", use_container_width=True)
+            if submit_login:
+                if not login_pass:
+                    st.warning("⚠️ Please enter a password.")
+                else:
+                    is_valid, user_name = verify_credentials(login_user, login_pass)
+                    if is_valid:
+                        st.session_state["authenticated"] = True
+                        st.session_state["username"] = user_name
+                        st.success(f"✅ Access granted! Welcome, **{user_name}**.")
+                        st.rerun()
+                    else:
+                        st.error("❌ Invalid password or username. Please check and try again.")
+
+        st.markdown("""
+        <div style="background-color: #FFFFFF; border: 1px dashed #81C784; border-radius: 10px; padding: 14px 18px; margin-top: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.03);">
+            <p style="margin: 0; font-size: 0.88rem; color: #1E4620;">
+                🔑 <strong>Default Login Credentials:</strong><br>
+                • <strong>Username:</strong> <code>admin</code><br>
+                • <strong>Password:</strong> <code>admin123</code><br>
+                <small style="color: #4B6B4E;">(You can log in directly by keeping username as <code>admin</code> and entering <code>admin123</code>)</small>
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Halt execution so protected data and tabs are not loaded or shown
+    st.stop()
+
 # Helper function to load data
 @st.cache_data
 def load_vendor_data():
@@ -120,13 +245,27 @@ def load_pricing_data():
 vendors_df = load_vendor_data()
 pricing_df = load_pricing_data()
 
-# Sidebar
+# Sidebar for Authenticated Users
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/vegetables.png", width=70)
     st.markdown("### **Sabzi Mandi Platform**")
     st.markdown("**Omnichannel Operating Model**")
     st.markdown("---")
     
+    # User Profile & Logout
+    st.markdown(f"""
+    <div style="background: #E8F5E9; border: 1px solid #C8E6C9; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;">
+        <span style="font-size: 0.78rem; color: #2D6A4F; font-weight: 700; text-transform: uppercase;">👤 Active Session</span><br>
+        <strong style="color: #1E4620; font-size: 1.05rem;">{st.session_state.get('username', 'Admin')}</strong>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if st.button("🚪 Sign Out", key="sidebar_logout_btn", use_container_width=True):
+        st.session_state["authenticated"] = False
+        st.session_state["username"] = ""
+        st.rerun()
+
+    st.markdown("---")
     st.markdown("#### 📊 **Key System Metrics**")
     st.metric(label="Verified Mandi Shops", value=len(vendors_df), delta="58 Signboards")
     st.metric(label="Modeled Produce SKUs", value=len(pricing_df), delta="Daily Staples & Exotics")
@@ -143,17 +282,47 @@ with st.sidebar:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
+
+    st.markdown("---")
+    with st.expander("⚙️ Account & Change Password"):
+        with st.form("change_password_form"):
+            st.markdown("<small><strong>Update Login Password</strong></small>", unsafe_allow_html=True)
+            curr_p = st.text_input("Current Password", type="password", key="cp_curr")
+            new_p = st.text_input("New Password", type="password", key="cp_new")
+            conf_p = st.text_input("Confirm New Password", type="password", key="cp_conf")
+            change_submitted = st.form_submit_button("Update Password", use_container_width=True)
+            if change_submitted:
+                cfg = load_auth_config()
+                curr_u = st.session_state.get("username", "admin")
+                curr_stored = cfg.get("users", {}).get(curr_u, DEFAULT_USERS.get(curr_u, ""))
+                if curr_p != curr_stored:
+                    st.error("❌ Current password does not match.")
+                elif not new_p:
+                    st.error("❌ New password cannot be empty.")
+                elif new_p != conf_p:
+                    st.error("❌ New passwords do not match.")
+                else:
+                    cfg.setdefault("users", {})[curr_u] = new_p
+                    save_auth_config(cfg)
+                    st.success("✅ Password updated successfully!")
+
     st.markdown("---")
     st.caption("📍 Anchored at New Sabzi Mandi, Ghazipur, Delhi-110096")
 
-# Main Content Header
-col_h1, col_h2 = st.columns([4, 1])
+# Main Content Header for Authenticated Users
+col_h1, col_h2, col_h3 = st.columns([3.5, 0.9, 0.9])
 with col_h1:
     st.markdown('<div class="main-header">🥦 Sabzi Mandi to Table — Operating Platform</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">Ghazipur Wholesale Sourcing • Offline Retail Blueprint • Hyperlocal WhatsApp Delivery • Dynamic P&L</div>', unsafe_allow_html=True)
 with col_h2:
     st.markdown("<br>", unsafe_allow_html=True)
-    st.button("🔄 Refresh Data", on_click=st.cache_data.clear)
+    st.button("🔄 Refresh Data", on_click=st.cache_data.clear, use_container_width=True)
+with col_h3:
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("🚪 Sign Out", key="top_logout_btn", use_container_width=True):
+        st.session_state["authenticated"] = False
+        st.session_state["username"] = ""
+        st.rerun()
 
 # Tabs
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
